@@ -20,8 +20,8 @@ author:             Cajunvoodoo
 -- category:
 extra-source-files: CHANGELOG.md
 
-executable consoleApp
-    main-is:          consoleApp.hs
+library
+    exposed-modules: ConsoleApp
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
@@ -43,10 +43,49 @@ executable consoleApp
                     , generic-deriving
                     , containers
                     , random
+    hs-source-dirs:   lib
+    default-language: Haskell2010
+
+executable consoleApp
+    main-is: main.hs
+    hs-source-dirs: app
+    build-depends: base
+                 , mapEditorToy
+                 , mtl
+                 , unix-compat
+                 , extra
+                 , optparse-applicative
+                 , text
+                 , text-show
+                 , ansi-terminal
+                 , massiv
+                 , vty
+                 , optics
+                 , megaparsec
+                 , generic-deriving
+                 , containers
+                 , random
     ghc-options:
                  -O2
                  -rtsopts
                  -threaded
                  "-with-rtsopts=-N4"
-    hs-source-dirs:   app
-    default-language: Haskell2010
+    default-language: GHC2021
+
+test-suite tests
+    type: exitcode-stdio-1.0
+    main-is: Tests.hs
+    hs-source-dirs: tests
+    default-extensions: TypeApplications, BangPatterns, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, MultiWayIf,
+             TypeOperators, OverloadedStrings, RecordWildCards, TemplateHaskell, DeriveGeneric
+    build-depends: base
+                 , hedgehog
+                 , mapEditorToy
+                 , mmorph
+                 , mtl
+                 , vty
+                 , text
+                 , massiv
+                 , optics
+    default-language: GHC2021
+    ghc-options: -threaded

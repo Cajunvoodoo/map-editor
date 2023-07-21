@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeApplications, BangPatterns, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, MultiWayIf,
              TypeOperators, OverloadedStrings, RecordWildCards, TemplateHaskell, DeriveGeneric #-}
-module Main where
+module ConsoleApp where
 
 import Data.Text (Text, replace, pack)
 import qualified Data.Text as T
@@ -165,6 +165,21 @@ chngBoardSz i = do
         newArr <- freeze Par marr
         arr .= newArr
         mvCursorSafePos
+
+-- | uses the same code as chngBoardSz, but ignores the ratio checking. only used in testing
+setBoardSize :: Int -> Editor Text ObjState ()
+setBoardSize i = do
+  env <- ask
+  ObjState {..} <- get
+
+  unless (_sz == 1 && i<0) $ do -- prevents an array with Sz2 0 0
+      marr <- M.newMArray (Sz (i :. i)) Floor -- create a new mutable array
+      oldMarr <- M.thaw _arr -- turn the old array mutable
+      zipSwapM_ (0 :. 0) (marr :: MArray RealWorld B Ix2 Object) oldMarr -- swap the elements
+      sz .= i -- set the size
+      newArr <- freeze Par marr
+      arr .= newArr
+      mvCursorSafePos
 
 mvCursorSafePos :: Editor Text ObjState ()
 mvCursorSafePos = do
@@ -402,12 +417,17 @@ handleCommand command = do
     ConsoleEnv {..} <- ask
     case command of
       Quit              -> liftIO (shutdown _vty) >> liftIO exitSuccess
-      Write txt         -> liftIO $ writeArr _arr txt --TODO: COMPLETE (add unsaved confirmation) 
+      Write txt         -> liftIO $ writeArr _arr txt --TODO: COMPLETE (add unsaved confirmation)
       WriteQuit txt     -> liftIO $ writeArr _arr txt >> shutdown _vty >> liftIO exitSuccess
       Jump (y :. x)     -> pos .= (y,x) >> mvCursorSafePos
-      Fill (x1 :. y1) (x2 :. y2) obj -> do
+      Fill (x1' :. y1') (x2' :. y2') obj -> do
           ObjState {..} <- get
-          let xBnd = if x2 > _sz then _sz+1 else x2+1 -- prevent a stupidly big array
+          let (x1, y1, x2, y2) =
+                --if the first coord is larger than the second coord, swap them, since arrays need to have normal sizes
+                if x1' >= x2' && y1' >= y2'
+                then (x2', y2', x1', y1')
+                else (x1', y1', x2', y2')
+              xBnd = if x2 > _sz then _sz+1 else x2+1 -- prevent a stupidly big array
               yBnd = if y2 > _sz then _sz+1 else y2+1
           marr    <- M.newMArray (Sz (abs xBnd :. abs yBnd)) obj -- create a new mutable array
           oldMarr <- M.thaw _arr
@@ -425,7 +445,6 @@ handleHotkey :: Text -> Commandlet -> Editor Text ObjState ()
 handleHotkey digit commandlet = do
     ObjState   {..} <- get
     ConsoleEnv {..} <- ask
-    cfg  <- liftIO standardIOConfig;
     (xBnd, yBnd) <- liftIO $ displayBounds (outputIface _vty)
 
     let !pad' = pad 0 (yBnd-5) 0 0
@@ -454,7 +473,7 @@ handleHotkey digit commandlet = do
         jumpImage = tH ("Give a coordinate (y:.x) to jump to when pressing " <> T.pack (show digit))
 
         jumpCallback :: Ix2 -> Editor Text ObjState ()
-        jumpCallback ix = do 
+        jumpCallback ix = do
             ObjState {..} <- get
             hotkeys .= Map.insert digit (return $ Jump ix) _hotkeys
 
